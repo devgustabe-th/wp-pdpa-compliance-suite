@@ -28,12 +28,9 @@ class DB {
 			ip_address VARCHAR(100) NOT NULL DEFAULT '',
 			consent_type VARCHAR(100) NOT NULL,
 			consent_details TEXT,
-			policy_version VARCHAR(50) NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL,
 			PRIMARY KEY (log_id),
-			INDEX idx_user_id (user_id),
-			INDEX idx_guest_identifier (guest_identifier),
-			INDEX idx_created_at (created_at)
+			INDEX idx_user_id (user_id)
 		) $charset_collate;";
 		dbDelta( $sql_logs );
 
@@ -56,5 +53,21 @@ class DB {
 			INDEX idx_status_created (request_status, created_at)
 		) $charset_collate;";
 		dbDelta( $sql_dsar );
+
+		// --- NEW TABLE ADDED HERE ---
+		// Table for Managed Scripts
+		$table_name_scripts = $wpdb->prefix . 'pdpa_managed_scripts';
+		$sql_scripts = "CREATE TABLE $table_name_scripts (
+			script_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+			service_name VARCHAR(100) NOT NULL,
+			tracking_id VARCHAR(255) NOT NULL,
+			cookie_category VARCHAR(100) NOT NULL,
+			description TEXT,
+			status VARCHAR(20) NOT NULL DEFAULT 'active',
+			created_at DATETIME NOT NULL,
+			PRIMARY KEY (script_id),
+			INDEX idx_status_category (status, cookie_category)
+		) $charset_collate;";
+		dbDelta( $sql_scripts );
 	}
 }

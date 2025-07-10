@@ -42,7 +42,8 @@ final class Main {
 		require_once WPPCS_PATH . 'includes/class-db.php';
 		require_once WPPCS_PATH . 'includes/class-admin-menu.php';
 		require_once WPPCS_PATH . 'includes/class-frontend.php';
-        require_once WPPCS_PATH . 'includes/class-settings.php'; // ตรวจสอบว่ามีบรรทัดนี้
+        require_once WPPCS_PATH . 'includes/class-settings.php';
+        require_once WPPCS_PATH . 'includes/class-cookie-manager.php'; // <-- บรรทัดที่เพิ่มเข้ามา
 	}
 
 	/**
@@ -51,6 +52,7 @@ final class Main {
 	private function init_hooks() {
 		new Admin_Menu();
 		new Frontend();
-        new Settings(); // ตรวจสอบว่ามีบรรทัดนี้
+        new Settings();
+        new Cookie_Manager(); // <-- บรรทัดที่เพิ่มเข้ามา
 	}
 }
