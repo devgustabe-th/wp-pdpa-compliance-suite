@@ -1,0 +1,110 @@
+/*
+ * WP PDPA Compliance Suite - Public Facing Styles
+ * NEW Aesthetic: Luxury, Minimal, Clean
+ */
+
+/* Main form container: clean and borderless */
+.wppcs-form {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    max-width: 700px;
+    margin: 60px auto; /* More vertical space */
+    padding: 10px; /* Minimal padding, we rely on spacing inside */
+    background-color: transparent;
+    border: none;
+}
+
+.wppcs-form-row {
+    margin-bottom: 35px; /* Increased spacing between rows */
+}
+
+/* Labels: Uppercase, spaced out for a clean, technical look */
+.wppcs-form label {
+    display: block;
+    font-weight: 500;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
+    color: #555;
+}
+
+.wppcs-form .required {
+    color: #D9578C; /* Softer pink for required asterisk */
+    margin-left: 5px;
+    font-weight: 700;
+}
+
+/* Input Fields: Underline style instead of a full box */
+.wppcs-form input[type="text"],
+.wppcs-form input[type="email"],
+.wppcs-form select,
+.wppcs-form textarea {
+    width: 100%;
+    padding: 10px 5px; /* More vertical, less horizontal padding */
+    font-size: 16px;
+    color: #222;
+    background-color: transparent;
+    border: none; /* Remove all borders */
+    border-bottom: 2px solid #ddd; /* Add a bottom border only */
+    border-radius: 0; /* Sharp corners */
+    box-sizing: border-box;
+    transition: border-color 0.3s ease;
+}
+
+.wppcs-form select {
+    appearance: none; /* For custom select arrow if needed later */
+}
+
+/* Focus State: The accent color comes alive on focus */
+.wppcs-form input[type="text"]:focus,
+.wppcs-form input[type="email"]:focus,
+.wppcs-form select:focus,
+.wppcs-form textarea:focus {
+    outline: none;
+    box-shadow: none;
+    border-bottom-color: rgb(2, 135, 135);
+}
+
+.wppcs-form small.description {
+    display: block;
+    font-size: 13px;
+    color: #888;
+    margin-top: 8px;
+    font-style: italic;
+}
+
+/* The Button: Refined and modern */
+.wppcs-button {
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 15px 30px;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+
+    /* Your requested color with !important to override themes */
+    background-color: rgb(2, 135, 135) !important;
+    border: none !important;
+    color: #ffffff !important;
+}
+
+.wppcs-button:hover,
+.wppcs-button:focus {
+    background-color: rgb(1, 107, 107) !important;
+    box-shadow: 0 4px 15px rgba(2, 135, 135, 0.3);
+    transform: translateY(-2px);
+}
+
+/* Alert message styles */
+.wppcs-alert {
+    padding: 20px;
+    margin: 20px 0;
+    border: 1px solid #c3e6cb;
+    border-left-width: 5px;
+    border-radius: 4px;
+    background-color: #f1f8f3;
+    color: #155724;
+}
