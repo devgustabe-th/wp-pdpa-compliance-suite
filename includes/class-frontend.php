@@ -16,42 +16,58 @@ class Frontend {
 	 * Constructor.
 	 */
 	public function __construct() {
-		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend_styles' ] );
+		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend_assets' ] );
 		add_shortcode( 'pdpa_dsar_form', [ $this, 'render_dsar_form' ] );
+		add_action( 'wp_footer', [ $this, 'render_cookie_banner_and_modal' ] );
 	}
 
 	/**
 	 * Enqueue styles and scripts for the frontend.
 	 */
-	public function enqueue_frontend_styles() {
+	public function enqueue_frontend_assets() {
 		global $post;
-		if ( is_a( $post, 'WP_Post' ) && has_shortcode( $post->post_content, 'pdpa_dsar_form' ) ) {
-			wp_enqueue_style(
-				'wp-pdpa-cs-public-styles',
-				WPPCS_URL . 'assets/css/public-styles.css',
-				[],
-				WPPCS_VERSION
-			);
+		$options = get_option( 'wppcs_settings', [] );
+		$banner_enabled = $options['enable_banner'] ?? 'on';
+		$is_banner_active = 'on' === $banner_enabled && ! isset( $_COOKIE['wppcs_consent_given'] );
+
+		$should_load_assets = ( is_a( $post, 'WP_Post' ) && has_shortcode( $post->post_content, 'pdpa_dsar_form' ) ) || $is_banner_active;
+
+		if ( $should_load_assets ) {
+			wp_enqueue_style( 'wp-pdpa-cs-public-styles', WPPCS_URL . 'assets/css/public-styles.css', [], WPPCS_VERSION );
+			if ( $is_banner_active ) {
+				wp_enqueue_script( 'wp-pdpa-cs-public-scripts', WPPCS_URL . 'assets/js/public-scripts.js', [], WPPCS_VERSION, true );
+			}
 		}
 	}
 
 	/**
+	 * Renders BOTH the Cookie Consent Banner and the Settings Modal in the footer.
+	 * This is the corrected function.
+	 */
+	public function render_cookie_banner_and_modal() {
+		$options = get_option( 'wppcs_settings', [] );
+		$is_enabled = $options['enable_banner'] ?? 'on';
+
+		if ( 'on' !== $is_enabled || isset( $_COOKIE['wppcs_consent_given'] ) ) {
+			return;
+		}
+
+		// Load the template for the banner
+		$this->get_template( 'cookie-banner' );
+		// Load the template for the modal
+		$this->get_template( 'cookie-settings-modal' );
+	}
+
+
+	/**
 	 * Renders the DSAR form shortcode.
-	 *
-	 * @return string The form HTML.
 	 */
 	public function render_dsar_form() {
-		// Step 1: Handle form submission
 		$this->handle_form_submission();
-
-		// Step 2: Display the form by loading a template
 		ob_start();
-
-		// Display success/error messages if any
 		if ( ! empty( $this->form_errors ) ) {
 			echo '<div class="wppcs-alert wppcs-alert-error">' . implode( '<br>', $this->form_errors ) . '</div>';
 		}
-
 		$this->get_template( 'dsar-form' );
 		return ob_get_clean();
 	}
@@ -60,17 +76,15 @@ class Frontend {
 	 * Handles the logic for when the DSAR form is submitted.
 	 */
 	private function handle_form_submission() {
-		if ( 'POST' !== $_SERVER['REQUEST_METHOD'] || empty( $_POST['wppcs_action'] ) || 'submit_dsar' !== $_POST['wppcs_action'] ) {
+        if ( 'POST' !== $_SERVER['REQUEST_METHOD'] || empty( $_POST['wppcs_action'] ) || 'submit_dsar' !== $_POST['wppcs_action'] ) {
 			return;
 		}
 
-		// 1. Security Check: Verify nonce
 		if ( ! isset( $_POST['wppcs_nonce'] ) || ! wp_verify_nonce( $_POST['wppcs_nonce'], 'wppcs_submit_dsar_nonce' ) ) {
 			$this->form_errors[] = __( 'Security check failed. Please try again.', 'wp-pdpa-cs' );
 			return;
 		}
 
-		// 2. Sanitize and Validate Data
 		$name         = isset( $_POST['wppcs_name'] ) ? sanitize_text_field( $_POST['wppcs_name'] ) : '';
 		$email        = isset( $_POST['wppcs_email'] ) ? sanitize_email( $_POST['wppcs_email'] ) : '';
 		$request_type = isset( $_POST['wppcs_request_type'] ) ? sanitize_key( $_POST['wppcs_request_type'] ) : '';
@@ -85,7 +99,6 @@ class Frontend {
 			return;
 		}
 
-		// 3. Handle File Upload (if present)
 		$attachment_path = '';
 		if ( isset( $_FILES['wppcs_attachment'] ) && ! empty( $_FILES['wppcs_attachment']['name'] ) ) {
 			if ( ! function_exists( 'wp_handle_upload' ) ) {
@@ -96,17 +109,15 @@ class Frontend {
 			$movefile = wp_handle_upload( $uploaded_file, $upload_overrides );
 
 			if ( $movefile && ! isset( $movefile['error'] ) ) {
-				$attachment_path = $movefile['file']; // We store the server path
+				$attachment_path = $movefile['file'];
 			} else {
 				$this->form_errors[] = __( 'File upload error:', 'wp-pdpa-cs' ) . ' ' . $movefile['error'];
 				return;
 			}
 		}
 
-		// 4. Insert Data into Database
 		global $wpdb;
 		$table_name = $wpdb->prefix . 'pdpa_dsar_requests';
-
 		$result = $wpdb->insert(
 			$table_name,
 			[
@@ -115,13 +126,12 @@ class Frontend {
 				'request_type'    => $request_type,
 				'request_details' => $details,
 				'attachment_path' => $attachment_path,
-				'request_status'  => 'new', // Default status
-				'created_at'      => current_time( 'mysql', 1 ), // GMT time
+				'request_status'  => 'new',
+				'created_at'      => current_time( 'mysql', 1 ),
 			],
 			[ '%s', '%s', '%s', '%s', '%s', '%s', '%s' ]
 		);
 
-		// 5. Redirect to prevent form resubmission
 		if ( $result ) {
 			$current_url = home_url( add_query_arg( null, null ) );
 			wp_redirect( add_query_arg( 'request_success', '1', $current_url ) );
@@ -134,16 +144,19 @@ class Frontend {
 	/**
 	 * Helper function to load templates.
 	 */
-	public function get_template( $template_name ) {
-		// Display success message after redirect
-		if ( isset( $_GET['request_success'] ) && '1' === $_GET['request_success'] ) {
+	public function get_template( $template_name, $args = [] ) {
+        if ( isset( $_GET['request_success'] ) && '1' === $_GET['request_success'] && 'dsar-form' === $template_name ) {
 			echo '<div class="wppcs-alert wppcs-alert-success">' . esc_html__( 'Thank you! Your request has been submitted successfully.', 'wp-pdpa-cs' ) . '</div>';
-			return; // Don't show the form again
+			return;
 		}
 
+		if ( ! empty( $args ) && is_array( $args ) ) {
+			extract( $args );
+		}
+		
 		$theme_template = get_stylesheet_directory() . '/wp-pdpa-cs/' . $template_name . '.php';
-		if ( file_exists( $theme_template ) ) { load_template( $theme_template, false ); return; }
+		if ( file_exists( $theme_template ) ) { load_template( $theme_template, false, $args ); return; }
 		$plugin_template = WPPCS_PATH . 'templates/' . $template_name . '.php';
-		if ( file_exists( $plugin_template ) ) { load_template( $plugin_template, false ); }
+		if ( file_exists( $plugin_template ) ) { load_template( $plugin_template, false, $args ); }
 	}
 }
