@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (!banner) return;
 
+    // --- Helper Functions ---
     const hideBanner = () => {
         banner.classList.add('wppcs-cookie-banner--hidden');
     };
@@ -16,34 +17,59 @@ document.addEventListener('DOMContentLoaded', function() {
         const d = new Date();
         d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
         let expires = "expires=" + d.toUTCString();
-        document.cookie = name + "=" + value + ";" + expires + ";path=/;SameSite=Lax";
+        document.cookie = name + "=" + JSON.stringify(value) + ";" + expires + ";path=/;SameSite=Lax";
+    };
+
+    const logConsentToServer = (consentType, consentDetails = {}) => {
+        if (typeof wppcs_ajax === 'undefined') {
+            console.error('PDPA Plugin: AJAX object not found.');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('action', 'wppcs_log_consent');
+        formData.append('nonce', wppcs_ajax.nonce);
+        formData.append('consent_type', consentType);
+        formData.append('consent_details', JSON.stringify(consentDetails));
+
+        fetch(wppcs_ajax.ajax_url, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('PDPA Consent Logged:', data.data.message);
+            } else {
+                console.error('PDPA Log Error:', data.data.message);
+            }
+        })
+        .catch(error => console.error('PDPA AJAX Error:', error));
     };
 
     // --- Event Listeners ---
-
-    // Accept All Button
     if (acceptButton) {
         acceptButton.addEventListener('click', function() {
-            setCookie('wppcs_consent_given', 'all', 365);
             hideBanner();
+            setCookie('wppcs_consent_given', 'all', 365);
+            
+            // --- THIS IS THE KEY CHANGE ---
+            // Instead of sending an empty object, we explicitly state that all categories are accepted.
+            const allConsentDetails = {
+                analytics: true,
+                marketing: true
+            };
+            logConsentToServer('accept_all', allConsentDetails);
         });
     }
 
-    // Open Settings Modal Button
     if (openSettingsButton && settingsModalOverlay) {
-        openSettingsButton.addEventListener('click', function() {
-            settingsModalOverlay.classList.remove('wppcs-modal-hidden');
-        });
+        openSettingsButton.addEventListener('click', () => settingsModalOverlay.classList.remove('wppcs-modal-hidden'));
     }
 
-    // Close Settings Modal Button
     if (closeModalButton && settingsModalOverlay) {
-        closeModalButton.addEventListener('click', function() {
-            settingsModalOverlay.classList.add('wppcs-modal-hidden');
-        });
+        closeModalButton.addEventListener('click', () => settingsModalOverlay.classList.add('wppcs-modal-hidden'));
     }
 
-    // Save Settings Button
     if (saveSettingsButton && settingsModalOverlay) {
         saveSettingsButton.addEventListener('click', function() {
             const analyticsConsent = document.getElementById('wppcs-consent-analytics').checked;
@@ -53,12 +79,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 analytics: analyticsConsent,
                 marketing: marketingConsent
             };
-            
-            // Save choices as a JSON string in a cookie
-            setCookie('wppcs_consent_given', JSON.stringify(consentChoices), 365);
-            
-            settingsModalOverlay.classList.add('wppcs-modal-hidden');
+
             hideBanner();
+            setCookie('wppcs_consent_given', consentChoices, 365);
+            logConsentToServer('custom_save', consentChoices);
+            settingsModalOverlay.classList.add('wppcs-modal-hidden');
         });
     }
 });

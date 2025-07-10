@@ -10,104 +10,108 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Admin_Menu {
 
-    /**
-     * Stores admin notices to be displayed on the current page load.
-     * @var array
-     */
     private $admin_notices = [];
 
-    /**
-     * Constructor
-     */
     public function __construct() {
         add_action( 'admin_menu', [ $this, 'setup_admin_menu' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_styles' ] );
         add_action( 'admin_notices', [ $this, 'display_admin_notices' ] );
     }
 
-    /**
-     * Handles form submissions for updating request status.
-     * This function is now hooked to 'load-{page_hook}'
-     */
     public function handle_request_actions() {
         if ( ! isset( $_POST['wppcs_action'] ) || 'update_request_status' !== $_POST['wppcs_action'] ) {
             return;
         }
-
         $request_id = isset( $_POST['request_id'] ) ? absint( $_POST['request_id'] ) : 0;
-
-        if ( ! $request_id || ! current_user_can( 'manage_options' ) ) {
-            return;
-        }
-
+        if ( ! $request_id || ! current_user_can( 'manage_options' ) ) { return; }
         if ( ! isset( $_POST['_wppcs_request_nonce'] ) || ! wp_verify_nonce( $_POST['_wppcs_request_nonce'], 'wppcs_update_request_status_' . $request_id ) ) {
             $this->admin_notices[] = [ 'type' => 'error', 'message' => 'Security check failed!' ];
             return;
         }
-
         $new_status   = sanitize_key( $_POST['request_status'] );
         $admin_notes  = sanitize_textarea_field( $_POST['admin_notes'] );
         $resolved_at  = ( in_array( $new_status, [ 'completed', 'rejected' ] ) ) ? current_time( 'mysql', 1 ) : null;
-
         global $wpdb;
         $table_name = $wpdb->prefix . 'pdpa_dsar_requests';
-        $updated = $wpdb->update(
-            $table_name,
-            [
-                'request_status' => $new_status,
-                'admin_notes'    => $admin_notes,
-                'resolved_at'    => $resolved_at,
-                'resolved_by'    => get_current_user_id(),
-            ],
-            [ 'request_id' => $request_id ],
-            [ '%s', '%s', '%s', '%d' ],
-            [ '%d' ]
-        );
-        
-        if ( $updated !== false ) {
-            $this->admin_notices[] = [ 'type' => 'success', 'message' => __( 'Request status updated successfully.', 'wp-pdpa-cs' ) ];
-        } else {
-            $this->admin_notices[] = [ 'type' => 'info', 'message' => __( 'No changes were made to the request status.', 'wp-pdpa-cs' ) ];
-        }
+        $updated = $wpdb->update( $table_name, ['request_status' => $new_status, 'admin_notes' => $admin_notes, 'resolved_at' => $resolved_at, 'resolved_by' => get_current_user_id()], ['request_id' => $request_id], ['%s', '%s', '%s', '%d'], ['%d'] );
+        $this->admin_notices[] = ( $updated !== false ) ? [ 'type' => 'success', 'message' => __( 'Request status updated successfully.', 'wp-pdpa-cs' ) ] : [ 'type' => 'info', 'message' => __( 'No changes were made to the request status.', 'wp-pdpa-cs' ) ];
     }
 
-    /**
-     * Display admin notices from our class property.
-     */
     public function display_admin_notices() {
         if ( ! empty( $this->admin_notices ) ) {
             foreach ( $this->admin_notices as $notice ) {
-                ?>
-                <div class="notice notice-<?php echo esc_attr( $notice['type'] ); ?> is-dismissible">
-                    <p><?php echo esc_html( $notice['message'] ); ?></p>
-                </div>
-                <?php
+                printf( '<div class="notice notice-%s is-dismissible"><p>%s</p></div>', esc_attr( $notice['type'] ), esc_html( $notice['message'] ) );
             }
         }
     }
 
-    /**
-     * Enqueue admin styles.
-     */
     public function enqueue_admin_styles( $hook ) {
         if ( strpos( $hook, 'wp-pdpa-cs' ) === false ) { return; }
         wp_enqueue_style( 'wp-pdpa-cs-admin-styles', WPPCS_URL . 'assets/css/admin-styles.css', [], WPPCS_VERSION );
     }
 
-    /**
-     * Setup the admin menu and sub-menus.
-     */
     public function setup_admin_menu() {
         add_menu_page( 'PDPA Compliance', '🛡️ PDPA Compliance', 'manage_options', 'wp-pdpa-cs-dashboard', [ $this, 'dashboard_page_html' ], 'dashicons-shield-alt' );
-        
         add_submenu_page( 'wp-pdpa-cs-dashboard', 'Dashboard', 'Dashboard', 'manage_options', 'wp-pdpa-cs-dashboard', [ $this, 'dashboard_page_html' ] );
-        
         $requests_page_hook = add_submenu_page( 'wp-pdpa-cs-dashboard', 'Data Requests', 'Data Requests', 'manage_options', 'wp-pdpa-cs-requests', [ $this, 'requests_page_router' ] );
         
-        // วางโค้ดสำหรับเพิ่มเมนู Settings ไว้ตรงนี้
-        add_submenu_page( 'wp-pdpa-cs-dashboard', 'Settings', 'Settings', 'manage_options', 'wp-pdpa-cs-settings', [ $this, 'settings_page_html' ] );
+        // NEW: Add the Consent Log submenu page
+        add_submenu_page( 'wp-pdpa-cs-dashboard', 'Consent Log', 'Consent Log', 'manage_options', 'wp-pdpa-cs-consent-log', [ $this, 'consent_log_page_html' ] );
 
+        add_submenu_page( 'wp-pdpa-cs-dashboard', 'Settings', 'Settings', 'manage_options', 'wp-pdpa-cs-settings', [ $this, 'settings_page_html' ] );
         add_action( 'load-' . $requests_page_hook, [ $this, 'handle_request_actions' ] );
+    }
+    
+    /**
+     * NEW: Callback to render the Consent Log page.
+     */
+    public function consent_log_page_html() {
+        global $wpdb;
+        $logs_table = $wpdb->prefix . 'pdpa_consent_logs';
+        $all_logs = $wpdb->get_results( "SELECT * FROM $logs_table ORDER BY created_at DESC" );
+        ?>
+        <div class="wrap wp-pdpa-cs-wrap">
+            <h1><?php esc_html_e( 'Consent Log', 'wp-pdpa-cs' ); ?></h1>
+            <p><?php esc_html_e( 'This log records every consent action taken by users via the cookie banner.', 'wp-pdpa-cs' ); ?></p>
+            <table class="wp-list-table widefat striped fixed">
+                <thead>
+                    <tr>
+                        <th style="width:20%;"><?php esc_html_e( 'User', 'wp-pdpa-cs' ); ?></th>
+                        <th style="width:15%;"><?php esc_html_e( 'Consent Type', 'wp-pdpa-cs' ); ?></th>
+                        <th><?php esc_html_e( 'Details', 'wp-pdpa-cs' ); ?></th>
+                        <th style="width:15%;"><?php esc_html_e( 'IP Address', 'wp-pdpa-cs' ); ?></th>
+                        <th style="width:20%;"><?php esc_html_e( 'Date', 'wp-pdpa-cs' ); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ( ! empty( $all_logs ) ) : ?>
+                        <?php foreach ( $all_logs as $log ) : ?>
+                            <tr>
+                                <td>
+                                    <?php
+                                    if ( $log->user_id > 0 ) {
+                                        $user = get_userdata( $log->user_id );
+                                        echo '<strong>' . esc_html( $user ? $user->user_login : 'User #' . $log->user_id ) . '</strong>';
+                                    } else {
+                                        echo 'Guest: ' . esc_html( substr( $log->guest_identifier, 0, 12 ) ) . '...';
+                                    }
+                                    ?>
+                                </td>
+                                <td><span class="badge"><?php echo esc_html( str_replace('_', ' ', $log->consent_type) ); ?></span></td>
+                                <td><code style="font-size: 12px;"><?php echo esc_html( $log->consent_details ); ?></code></td>
+                                <td><?php echo esc_html( $log->ip_address ); ?></td>
+                                <td><?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $log->created_at ) ) ); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else : ?>
+                        <tr>
+                            <td colspan="5"><?php esc_html_e( 'No consent logs found yet. Try accepting the cookie banner on the frontend.', 'wp-pdpa-cs' ); ?></td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php
     }
     
     /**

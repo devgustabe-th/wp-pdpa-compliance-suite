@@ -19,6 +19,10 @@ class Frontend {
 		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend_assets' ] );
 		add_shortcode( 'pdpa_dsar_form', [ $this, 'render_dsar_form' ] );
 		add_action( 'wp_footer', [ $this, 'render_cookie_banner_and_modal' ] );
+
+		// Hook the AJAX handler for both logged-in and logged-out users
+		add_action( 'wp_ajax_wppcs_log_consent', [ $this, 'handle_ajax_log_consent' ] );
+		add_action( 'wp_ajax_nopriv_wppcs_log_consent', [ $this, 'handle_ajax_log_consent' ] );
 	}
 
 	/**
@@ -29,20 +33,66 @@ class Frontend {
 		$options = get_option( 'wppcs_settings', [] );
 		$banner_enabled = $options['enable_banner'] ?? 'on';
 		$is_banner_active = 'on' === $banner_enabled && ! isset( $_COOKIE['wppcs_consent_given'] );
-
 		$should_load_assets = ( is_a( $post, 'WP_Post' ) && has_shortcode( $post->post_content, 'pdpa_dsar_form' ) ) || $is_banner_active;
 
 		if ( $should_load_assets ) {
 			wp_enqueue_style( 'wp-pdpa-cs-public-styles', WPPCS_URL . 'assets/css/public-styles.css', [], WPPCS_VERSION );
 			if ( $is_banner_active ) {
 				wp_enqueue_script( 'wp-pdpa-cs-public-scripts', WPPCS_URL . 'assets/js/public-scripts.js', [], WPPCS_VERSION, true );
+
+				// Pass PHP data to our JavaScript file
+				wp_localize_script(
+					'wp-pdpa-cs-public-scripts',
+					'wppcs_ajax',
+					[
+						'ajax_url' => admin_url( 'admin-ajax.php' ),
+						'nonce'    => wp_create_nonce( 'wppcs_consent_nonce' ),
+					]
+				);
 			}
 		}
 	}
 
 	/**
+	 * AJAX handler for logging user consent.
+	 */
+	public function handle_ajax_log_consent() {
+		check_ajax_referer( 'wppcs_consent_nonce', 'nonce' );
+
+		$consent_type = isset( $_POST['consent_type'] ) ? sanitize_key( $_POST['consent_type'] ) : 'unknown';
+		$consent_details_raw = isset( $_POST['consent_details'] ) ? stripslashes( $_POST['consent_details'] ) : '{}';
+        
+        json_decode( $consent_details_raw );
+        $consent_details = (json_last_error() === JSON_ERROR_NONE) ? $consent_details_raw : '{}';
+
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'pdpa_consent_logs';
+		$user_id = get_current_user_id();
+		$guest_id = ( $user_id === 0 ) ? 'guest_' . hash( 'sha256', $_SERVER['REMOTE_ADDR'] . $_SERVER['HTTP_USER_AGENT'] ) : '';
+
+		$wpdb->insert(
+			$table_name,
+			[
+				'user_id'          => $user_id,
+				'guest_identifier' => $guest_id,
+				'ip_address'       => $this->get_anonymized_ip(),
+				'consent_type'     => $consent_type,
+				'consent_details'  => $consent_details,
+				'created_at'       => current_time( 'mysql', 1 ),
+			],
+			[ '%d', '%s', '%s', '%s', '%s', '%s' ]
+		);
+
+		wp_send_json_success( [ 'message' => 'Consent logged.' ] );
+	}
+    
+    private function get_anonymized_ip(): string {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        return preg_replace( '/\.\d+$/', '.0', $ip );
+    }
+
+	/**
 	 * Renders BOTH the Cookie Consent Banner and the Settings Modal in the footer.
-	 * This is the corrected function.
 	 */
 	public function render_cookie_banner_and_modal() {
 		$options = get_option( 'wppcs_settings', [] );
@@ -52,12 +102,9 @@ class Frontend {
 			return;
 		}
 
-		// Load the template for the banner
 		$this->get_template( 'cookie-banner' );
-		// Load the template for the modal
 		$this->get_template( 'cookie-settings-modal' );
 	}
-
 
 	/**
 	 * Renders the DSAR form shortcode.
@@ -73,7 +120,7 @@ class Frontend {
 	}
 
 	/**
-	 * Handles the logic for when the DSAR form is submitted.
+	 * Handles the logic for when the DSAR form is submitted. (This is the function that was missing)
 	 */
 	private function handle_form_submission() {
         if ( 'POST' !== $_SERVER['REQUEST_METHOD'] || empty( $_POST['wppcs_action'] ) || 'submit_dsar' !== $_POST['wppcs_action'] ) {
