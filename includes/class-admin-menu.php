@@ -38,10 +38,8 @@ class Admin_Menu {
         }
 
         $filename = 'consent-log-' . date('Y-m-d') . '.csv';
-
         header( 'Content-Type: text/csv; charset=utf-8' );
         header( 'Content-Disposition: attachment; filename=' . $filename );
-        
         $output = fopen( 'php://output', 'w' );
         fputcsv( $output, [ 'Log ID', 'User ID', 'Guest Identifier', 'IP Address', 'Consent Type', 'Consent Details', 'Date (UTC)' ] );
         foreach ( $all_logs as $log ) {
@@ -77,6 +75,47 @@ class Admin_Menu {
         );
         $this->admin_notices[] = ( $updated !== false ) ? [ 'type' => 'success', 'message' => __( 'Request status updated successfully.', 'wp-pdpa-cs' ) ] : [ 'type' => 'info', 'message' => __( 'No changes were made to the request status.', 'wp-pdpa-cs' ) ];
     }
+    
+    public function handle_cookie_manager_actions() {
+        if ( ! isset( $_POST['wppcs_action'] ) || 'add_new_script' !== $_POST['wppcs_action'] ) {
+            return;
+        }
+        if ( ! isset( $_POST['_wppcs_nonce'] ) || ! wp_verify_nonce( $_POST['_wppcs_nonce'], 'wppcs_add_new_script_nonce' ) ) {
+            wp_die('Security Check Failed!');
+        }
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        $service_name    = sanitize_text_field( $_POST['service_name'] );
+        $cookie_category = sanitize_key( $_POST['cookie_category'] );
+        $tracking_id     = sanitize_text_field( $_POST['tracking_id'] );
+        $description     = sanitize_textarea_field( $_POST['description'] );
+
+        if ( empty( $service_name ) || empty( $cookie_category ) || empty( $tracking_id ) ) {
+            set_transient( 'wppcs_admin_notice', [ 'type' => 'error', 'message' => 'Please fill in all required fields.' ], 5 );
+            return;
+        }
+
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'pdpa_managed_scripts';
+        $wpdb->insert(
+            $table_name,
+            [
+                'service_name'    => $service_name,
+                'cookie_category' => $cookie_category,
+                'tracking_id'     => $tracking_id,
+                'description'     => $description,
+                'status'          => 'active',
+                'created_at'      => current_time( 'mysql', 1 ),
+            ],
+            [ '%s', '%s', '%s', '%s', '%s', '%s' ]
+        );
+
+        $redirect_url = add_query_arg( [ 'page' => 'wp-pdpa-cs-cookie-manager', 'message' => '1' ], admin_url( 'admin.php' ) );
+        wp_safe_redirect( $redirect_url );
+        exit;
+    }
 
     public function display_admin_notices() {
         if ( ! empty( $this->admin_notices ) ) {
@@ -87,6 +126,9 @@ class Admin_Menu {
         if ( $notice = get_transient( 'wppcs_admin_notice' ) ) {
             printf( '<div class="notice notice-%s is-dismissible"><p>%s</p></div>', esc_attr( $notice['type'] ), esc_html( $notice['message'] ) );
             delete_transient( 'wppcs_admin_notice' );
+        }
+        if ( isset( $_GET['page'] ) && 'wp-pdpa-cs-cookie-manager' === $_GET['page'] && isset( $_GET['message'] ) && '1' === $_GET['message'] ) {
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'New script added successfully.', 'wp-pdpa-cs' ) . '</p></div>';
         }
     }
 
@@ -104,25 +146,14 @@ class Admin_Menu {
         
         add_submenu_page( 'wp-pdpa-cs-dashboard', 'Consent Log', 'Consent Log', 'manage_options', 'wp-pdpa-cs-consent-log', [ $this, 'consent_log_page_html' ] );
 
-        // --- NEW SUBMENU ADDED HERE ---
-        add_submenu_page(
-            'wp-pdpa-cs-dashboard',
-            __( 'Cookie Management', 'wp-pdpa-cs' ),
-            __( 'Cookie Management', 'wp-pdpa-cs' ),
-            'manage_options',
-            'wp-pdpa-cs-cookie-manager',
-            [ $this, 'cookie_manager_page_html' ]
-        );
-        // --- END NEW SUBMENU ---
+        $cookie_manager_hook = add_submenu_page( 'wp-pdpa-cs-dashboard', 'Cookie Management', 'Cookie Management', 'manage_options', 'wp-pdpa-cs-cookie-manager', [ $this, 'cookie_manager_page_html' ] );
         
         add_submenu_page( 'wp-pdpa-cs-dashboard', 'Settings', 'Settings', 'manage_options', 'wp-pdpa-cs-settings', [ $this, 'settings_page_html' ] );
         
         add_action( 'load-' . $requests_page_hook, [ $this, 'handle_request_actions' ] );
+        add_action( 'load-' . $cookie_manager_hook, [ $this, 'handle_cookie_manager_actions' ] );
     }
 
-    /**
-     * NEW: Callback to render the Cookie Management page.
-     */
     public function cookie_manager_page_html() {
         if ( class_exists( __NAMESPACE__ . '\Cookie_Manager' ) ) {
             $cookie_manager_page = new \WP_PDPA_CS\Cookie_Manager();
@@ -301,7 +332,7 @@ class Admin_Menu {
                     <p>
                         <?php wp_nonce_field( 'wppcs_update_request_status_' . $request->request_id, '_wppcs_request_nonce' ); ?>
                         <input type="hidden" name="wppcs_action" value="update_request_status">
-                        <input type="hidden" name="request_id" value="<?php echo esc_attr( $request->request_id ); ?>">
+                        <input type="hidden" name="request_id" value="<?php echo esc_attr( $request->id ); ?>">
                         <button type="submit" class="button button-primary button-large"><?php esc_html_e( 'Update Status', 'wp-pdpa-cs' ); ?></button>
                     </p>
                 </form>
