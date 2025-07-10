@@ -5,24 +5,100 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/**
- * Handles frontend logic and shortcodes.
- */
 class Frontend {
 
 	private $form_errors = [];
 
-	/**
-	 * Constructor.
-	 */
 	public function __construct() {
 		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend_assets' ] );
 		add_shortcode( 'pdpa_dsar_form', [ $this, 'render_dsar_form' ] );
 		add_action( 'wp_footer', [ $this, 'render_cookie_banner_and_modal' ] );
-
-		// Hook the AJAX handler for both logged-in and logged-out users
 		add_action( 'wp_ajax_wppcs_log_consent', [ $this, 'handle_ajax_log_consent' ] );
 		add_action( 'wp_ajax_nopriv_wppcs_log_consent', [ $this, 'handle_ajax_log_consent' ] );
+
+		// NEW: Hook to inject scripts into the page header
+		add_action( 'wp_head', [ $this, 'inject_managed_scripts' ] );
+	}
+
+	/**
+	 * NEW: The main engine for conditional script injection.
+	 */
+	public function inject_managed_scripts() {
+		// 1. Get the user's consent choices from the cookie.
+		if ( ! isset( $_COOKIE['wppcs_consent_given'] ) ) {
+			return; // No consent given, do nothing.
+		}
+
+		$consent_data_raw = stripslashes( $_COOKIE['wppcs_consent_given'] );
+		$consent_data = json_decode( $consent_data_raw, true );
+
+		// 2. Get all active scripts from the database.
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'pdpa_managed_scripts';
+		$active_scripts = $wpdb->get_results(
+			$wpdb->prepare( "SELECT * FROM %i WHERE status = %s", $table_name, 'active' )
+		);
+
+		if ( empty( $active_scripts ) ) {
+			return;
+		}
+
+		// 3. Loop through scripts, check consent, and inject.
+		foreach ( $active_scripts as $script ) {
+			$category = $script->cookie_category;
+			$should_inject = false;
+
+			// Check for consent
+			if ( $consent_data === 'all' ) { // User clicked "Accept All"
+				$should_inject = true;
+			} elseif ( is_array( $consent_data ) && ! empty( $consent_data[ $category ] ) ) { // User saved custom choices
+				$should_inject = true;
+			}
+			
+			if ( $should_inject ) {
+				$this->render_script_template( $script->service_name, $script->tracking_id );
+			}
+		}
+	}
+
+	/**
+	 * NEW: Renders the actual <script> tag based on the service name.
+	 */
+	private function render_script_template( $service_name, $tracking_id ) {
+		// We can add more services here in the future.
+		switch ( strtolower( $service_name ) ) {
+			case 'google analytics':
+				?>
+                <script async src="https://www.googletagmanager.com/gtag/js?id=<?php echo esc_attr( $tracking_id ); ?>"></script>
+                <script>
+                  window.dataLayer = window.dataLayer || [];
+                  function gtag(){dataLayer.push(arguments);}
+                  gtag('js', new Date());
+                  gtag('config', '<?php echo esc_attr( $tracking_id ); ?>');
+                </script>
+                <?php
+				break;
+
+			case 'facebook pixel':
+				?>
+                <script>
+                !function(f,b,e,v,n,t,s)
+                {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+                n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+                if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+                n.queue=[];t=b.createElement(e);t.async=!0;
+                t.src=v;s=b.getElementsByTagName(e)[0];
+                s.parentNode.insertBefore(t,s)}(window, document,'script',
+                'https://connect.facebook.net/en_US/fbevents.js');
+                fbq('init', '<?php echo esc_attr( $tracking_id ); ?>');
+                fbq('track', 'PageView');
+                </script>
+                <noscript><img height="1" width="1" style="display:none"
+                src="https://www.facebook.com/tr?id=<?php echo esc_attr( $tracking_id ); ?>&ev=PageView&noscript=1"
+                /></noscript>
+                <?php
+				break;
+		}
 	}
 
 	/**
