@@ -1,5 +1,4 @@
 <?php
-// NEW SIMPLIFIED VERSION of class-settings.php
 namespace WP_PDPA_CS;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -10,86 +9,104 @@ class Settings {
 
     const OPTION_GROUP = 'wppcs_settings_group';
     const OPTION_NAME = 'wppcs_settings';
+    const TEXT_DOMAIN = 'wp-pdpa-cs'; // Define text domain for translation context
 
     public function __construct() {
         add_action( 'admin_init', [ $this, 'register_settings' ] );
     }
 
     public function register_settings() {
-        // Register one single setting that will store all our options as an array.
         register_setting(
             self::OPTION_GROUP,
             self::OPTION_NAME,
             [ $this, 'sanitize_settings' ]
         );
 
-        // Add a single section to our settings page.
-        add_settings_section(
-            'wppcs_banner_section',
-            __( 'Cookie Consent Banner', 'wp-pdpa-cs' ),
-            '__return_false', // No description for the section itself.
-            self::OPTION_GROUP
-        );
+        // Section 1: Cookie Banner
+        add_settings_section( 'wppcs_banner_section', __( 'Cookie Consent Banner', 'wp-pdpa-cs' ), '__return_false', self::OPTION_GROUP );
+        add_settings_field('enable_banner', __( 'Enable Cookie Banner', 'wp-pdpa-cs' ), [ $this, 'render_field' ], self::OPTION_GROUP, 'wppcs_banner_section', [ 'type' => 'checkbox', 'id' => 'enable_banner', 'desc' => __('Enable to show the cookie consent banner on the frontend.', 'wp-pdpa-cs') ] );
+        add_settings_field('banner_title', __( 'Banner Title', 'wp-pdpa-cs' ), [ $this, 'render_field' ], self::OPTION_GROUP, 'wppcs_banner_section', [ 'type' => 'text', 'id' => 'banner_title', 'default' => 'We Value Your Privacy' ] );
+        add_settings_field('banner_description', __( 'Banner Description', 'wp-pdpa-cs' ), [ $this, 'render_field' ], self::OPTION_GROUP, 'wppcs_banner_section', [ 'type' => 'textarea', 'id' => 'banner_description', 'default' => 'We use cookies to enhance your Browse experience...' ] );
+        add_settings_field('accept_button_text', __( 'Accept Button Text', 'wp-pdpa-cs' ), [ $this, 'render_field' ], self::OPTION_GROUP, 'wppcs_banner_section', [ 'type' => 'text', 'id' => 'accept_button_text', 'default' => 'Accept All' ] );
 
-        // Add the fields to our section.
-        add_settings_field(
-            'enable_banner',
-            __( 'Enable Cookie Banner', 'wp-pdpa-cs' ),
-            [ $this, 'render_enable_banner_field' ],
-            self::OPTION_GROUP,
-            'wppcs_banner_section'
-        );
-        add_settings_field(
-            'banner_title',
-            __( 'Banner Title', 'wp-pdpa-cs' ),
-            [ $this, 'render_banner_title_field' ],
-            self::OPTION_GROUP,
-            'wppcs_banner_section'
-        );
-        add_settings_field(
-            'banner_description',
-            __( 'Banner Description', 'wp-pdpa-cs' ),
-            [ $this, 'render_banner_description_field' ],
-            self::OPTION_GROUP,
-            'wppcs_banner_section'
-        );
+        // Section 2: Integrations
+        add_settings_section( 'wppcs_integrations_section', __( 'Integrations', 'wp-pdpa-cs' ), '__return_false', self::OPTION_GROUP );
+        add_settings_field('enable_register_consent', __( 'Registration Page Consent', 'wp-pdpa-cs' ), [ $this, 'render_field' ], self::OPTION_GROUP, 'wppcs_integrations_section', [ 'type' => 'checkbox', 'id' => 'enable_register_consent', 'desc' => __('Add a mandatory privacy policy checkbox to the WordPress registration form.', 'wp-pdpa-cs') ] );
+        add_settings_field('register_consent_label', __( 'Checkbox Label', 'wp-pdpa-cs' ), [ $this, 'render_field' ], self::OPTION_GROUP, 'wppcs_integrations_section', [ 'type' => 'textarea', 'id' => 'register_consent_label', 'desc' => 'Use the <code>[privacy_policy]</code> shortcode to automatically link to your privacy policy page.', 'default' => 'I have read and agree to the [privacy_policy].' ] );
+        add_settings_field('register_error_message', __( 'Error Message', 'wp-pdpa-cs' ), [ $this, 'render_field' ], self::OPTION_GROUP, 'wppcs_integrations_section', [ 'type' => 'text', 'id' => 'register_error_message', 'desc' => 'The error shown if the checkbox is not ticked.', 'default' => 'You must accept the privacy policy to register.' ] );
     }
 
+    /**
+     * Sanitize and register strings for translation.
+     */
     public function sanitize_settings( $input ) {
         $new_input = [];
-        if ( isset( $input['enable_banner'] ) ) {
-            $new_input['enable_banner'] = 'on';
+        $translatable_fields = [
+            'banner_title',
+            'banner_description',
+            'accept_button_text',
+            'register_consent_label',
+            'register_error_message'
+        ];
+
+        // Sanitize checkboxes
+        $new_input['enable_banner'] = isset( $input['enable_banner'] ) ? 'on' : '';
+        $new_input['enable_register_consent'] = isset( $input['enable_register_consent'] ) ? 'on' : '';
+        
+        // Sanitize and register translatable fields
+        foreach ( $translatable_fields as $field_name ) {
+            if ( isset( $input[ $field_name ] ) ) {
+                $sanitized_value = ('banner_description' === $field_name || 'register_consent_label' === $field_name)
+                    ? sanitize_textarea_field( $input[ $field_name ] )
+                    : sanitize_text_field( $input[ $field_name ] );
+                
+                $new_input[ $field_name ] = $sanitized_value;
+
+                // --- THIS IS THE KEY PART FOR MULTILINGUAL SUPPORT ---
+                if ( function_exists( 'pll_register_string' ) ) {
+                    pll_register_string( $field_name, $sanitized_value, self::TEXT_DOMAIN, ('banner_description' === $field_name || 'register_consent_label' === $field_name) );
+                }
+                if ( function_exists( 'icl_register_string' ) ) {
+                    icl_register_string( self::TEXT_DOMAIN, $field_name . '_string_for_wpml', $sanitized_value );
+                }
+                 do_action( 'wpml_register_single_string', self::TEXT_DOMAIN, $field_name . '_string_for_wpml', $sanitized_value );
+            }
         }
-        if ( isset( $input['banner_title'] ) ) {
-            $new_input['banner_title'] = sanitize_text_field( $input['banner_title'] );
-        }
-        if ( isset( $input['banner_description'] ) ) {
-            $new_input['banner_description'] = sanitize_textarea_field( $input['banner_description'] );
-        }
+
         return $new_input;
     }
     
-    // --- Field Rendering Callbacks ---
-
-    public function render_enable_banner_field() {
+    /**
+     * Re-factored function to render any field type.
+     */
+    public function render_field( $args ) {
         $options = get_option( self::OPTION_NAME, [] );
-        $checked = isset( $options['enable_banner'] ) ? 'checked' : '';
-        echo '<input type="checkbox" name="' . self::OPTION_NAME . '[enable_banner]" ' . $checked . ' />';
-        echo '<p class="description">' . esc_html__('Enable to show the cookie consent banner on the frontend.', 'wp-pdpa-cs') . '</p>';
-    }
+        $value = $options[ $args['id'] ] ?? $args['default'] ?? '';
+        $name_attr = self::OPTION_NAME . '[' . $args['id'] . ']';
+        $description = $args['desc'] ?? '';
 
-    public function render_banner_title_field() {
-        $options = get_option( self::OPTION_NAME, [] );
-        $value = isset( $options['banner_title'] ) ? $options['banner_title'] : 'We Value Your Privacy';
-        echo '<input type="text" class="regular-text" name="' . self::OPTION_NAME . '[banner_title]" value="' . esc_attr( $value ) . '">';
-    }
+        switch ( $args['type'] ) {
+            case 'textarea':
+                echo '<textarea rows="5" class="large-text" name="' . esc_attr($name_attr) . '">' . esc_textarea( $value ) . '</textarea>';
+                break;
+            case 'checkbox':
+                echo '<input type="checkbox" name="' . esc_attr($name_attr) . '" ' . checked( $value, 'on', false ) . ' />';
+                if (!empty($description)) {
+                    // Use wp_kses_post to allow <code> tag in description
+                    echo ' <label for="'.esc_attr($name_attr).'">' . wp_kses_post($description) . '</label>';
+                }
+                return; // No extra description paragraph for checkboxes
+            case 'text':
+            default:
+                echo '<input type="text" class="regular-text" name="' . esc_attr($name_attr) . '" value="' . esc_attr( $value ) . '">';
+                break;
+        }
 
-    public function render_banner_description_field() {
-        $options = get_option( self::OPTION_NAME, [] );
-        $value = isset( $options['banner_description'] ) ? $options['banner_description'] : 'We use cookies to enhance your Browse experience...';
-        echo '<textarea rows="5" class="large-text" name="' . self::OPTION_NAME . '[banner_description]">' . esc_textarea( $value ) . '</textarea>';
+        if ( ! empty( $description ) ) {
+            // Use wp_kses_post to allow <code> tag in description
+            printf( '<p class="description">%s</p>', wp_kses_post( $description ) );
+        }
     }
-
 
     /**
      * Renders the settings page form.
@@ -100,12 +117,9 @@ class Settings {
             <h1><?php esc_html_e( 'PDPA Compliance Settings', 'wp-pdpa-cs' ); ?></h1>
             <form action="options.php" method="post">
                 <?php
-                // Output necessary hidden fields
                 settings_fields( self::OPTION_GROUP );
-                // Output the fields for our sections
                 do_settings_sections( self::OPTION_GROUP );
-                // Output the save button
-                submit_button( 'Save Settings' );
+                submit_button( __( 'Save Settings', 'wp-pdpa-cs' ) );
                 ?>
             </form>
         </div>

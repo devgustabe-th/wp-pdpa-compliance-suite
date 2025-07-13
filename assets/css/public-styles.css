@@ -186,3 +186,61 @@ input:checked + .wppcs-slider:before { transform: translateX(22px); }
     color: #fff; /* สีขาวเมื่อเมาส์ชี้ */
     background-color: #008C8C; /* สีดำออกเขียวน้ำเงิน (สีเดียวกับปุ่มหลัก) */
 }
+
+
+
+
+
+
+
+
+
+/* --- Custom Styles for WooCommerce Notices (FINAL, DEFINITIVE FIX) --- */
+.woocommerce-notices-wrapper .woocommerce-error,
+form.register .woocommerce-error {
+    padding: 1em 1.5em !important;
+    margin: 0 0 2em !important;
+    background-color: #fef2f2 !important; /* Soft Red Background */
+    color: #991b1b !important; /* Dark Red Text */
+    border: 1px solid #fecaca !important;
+    border-left-width: 5px !important;
+    border-left-color: #dc2626 !important; /* Stronger Red Border */
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    list-style: none outside !important;
+
+    /* Use Flexbox for perfect alignment */
+    display: flex !important;
+    align-items: center; /* Vertically align icon and text */
+    gap: 12px; /* Space between icon and text */
+}
+
+/* Style for the icon itself */
+.woocommerce-notices-wrapper .woocommerce-error::before,
+form.register .woocommerce-error::before {
+    font-family: 'Dashicons' !important;
+    content: "\f153" !important; /* WordPress 'dismiss' circle icon */
+    color: #dc2626 !important;
+    font-size: 20px !important;
+    line-height: 1 !important;
+    /* Let flexbox handle positioning */
+    position: static !important;
+    transform: none !important;
+    flex-shrink: 0; /* Prevent icon from shrinking */
+    margin: 0 !important;
+}
+
+/* Style for the text/list item inside the error box */
+.woocommerce-notices-wrapper .woocommerce-error li,
+form.register .woocommerce-error li {
+    flex-grow: 1; /* Allow text to take up remaining space */
+    padding: 0 !important;
+    margin: 0 !important;
+    list-style-type: none !important;
+}
+
+/* Remove default list styling from inner items */
+.woocommerce-notices-wrapper .woocommerce-error li::before,
+form.register .woocommerce-error li::before {
+    display: none !important;
+}

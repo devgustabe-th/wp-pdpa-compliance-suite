@@ -7,7 +7,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Cookie_Manager {
 
-	public function __construct() {}
+	public function __construct() {
+		// Actions for this page will be added here later
+	}
 
     /**
      * Main router for the page.
@@ -32,7 +34,9 @@ class Cookie_Manager {
      * Renders the list table view.
      */
     private function render_list_page() {
+        // Instantiate our list table class
         $list_table = new Managed_Scripts_List_Table();
+        // Fetch, prepare, and sort the data
         $list_table->prepare_items();
 		?>
 		<div class="wrap wp-pdpa-cs-wrap">
@@ -70,7 +74,7 @@ class Cookie_Manager {
                 <table class="form-table" role="presentation">
                     <tbody>
                         <tr>
-                            <th scope="row"><label for="cookie_category"><?php esc_html_e( 'Cookie Category', 'wp-pdpa-cs' ); ?></label></th>
+                            <th scope="row"><label for="cookie_category"><?php esc_html_e( 'Cookie Category', 'wp-pdpa-cs' ); ?> <span class="description">(required)</span></label></th>
                             <td>
                                 <select name="cookie_category" id="cookie_category" required>
                                     <option value=""><?php esc_html_e( '-- Select a category --', 'wp-pdpa-cs' ); ?></option>
@@ -81,24 +85,24 @@ class Cookie_Manager {
                             </td>
                         </tr>
                         <tr>
-                            <th scope="row"><label for="service_name"><?php esc_html_e( 'Service Name', 'wp-pdpa-cs' ); ?></label></th>
+                            <th scope="row"><label for="service_name"><?php esc_html_e( 'Service Name', 'wp-pdpa-cs' ); ?> <span class="description">(required)</span></label></th>
                             <td>
-                                <input type="text" name="service_name" id="service_name" class="regular-text" placeholder="e.g., Google Analytics 4" required>
+                                <input type="text" name="service_name" id="service_name" class="regular-text" placeholder="e.g., Google Analytics" required>
                                 <p class="description"><?php esc_html_e( 'A friendly name for your reference.', 'wp-pdpa-cs' ); ?></p>
                             </td>
                         </tr>
                         <tr>
-                            <th scope="row"><label for="tracking_id"><?php esc_html_e( 'Tracking ID', 'wp-pdpa-cs' ); ?></label></th>
+                            <th scope="row"><label for="tracking_id"><?php esc_html_e( 'Tracking ID', 'wp-pdpa-cs' ); ?> <span class="description">(required)</span></label></th>
                             <td>
-                                <input type="text" name="tracking_id" id="tracking_id" class="regular-text" placeholder="e.g., G-XXXXXXXXXX" required>
+                                <input type="text" name="tracking_id" id="tracking_id" class="regular-text" placeholder="e.g., G-XXXXXXXXXX or 123456789" required>
                                 <p class="description"><?php esc_html_e( 'Enter the Tracking ID, Pixel ID, etc., for the service.', 'wp-pdpa-cs' ); ?></p>
                             </td>
                         </tr>
                          <tr>
                             <th scope="row"><label for="description"><?php esc_html_e( 'Description', 'wp-pdpa-cs' ); ?></label></th>
                             <td>
-                                <textarea name="description" id="description" class="large-text" rows="4"></textarea>
-                                <p class="description"><?php esc_html_e( 'A brief description of what this script does (for your reference).', 'wp-pdpa-cs' ); ?></p>
+                                <textarea name="description" id="description" class="large-text" rows="4" placeholder="<?php esc_attr_e( 'e.g., Used to track website traffic and user behavior.', 'wp-pdpa-cs' ); ?>"></textarea>
+                                <p class="description"><?php esc_html_e( 'A brief description of what this script does (for your internal reference).', 'wp-pdpa-cs' ); ?></p>
                             </td>
                         </tr>
                     </tbody>

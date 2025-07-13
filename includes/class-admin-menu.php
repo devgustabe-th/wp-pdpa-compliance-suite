@@ -76,6 +76,9 @@ class Admin_Menu {
         $this->admin_notices[] = ( $updated !== false ) ? [ 'type' => 'success', 'message' => __( 'Request status updated successfully.', 'wp-pdpa-cs' ) ] : [ 'type' => 'info', 'message' => __( 'No changes were made to the request status.', 'wp-pdpa-cs' ) ];
     }
     
+    /**
+     * NEW: Handles adding a new script from the form.
+     */
     public function handle_cookie_manager_actions() {
         if ( ! isset( $_POST['wppcs_action'] ) || 'add_new_script' !== $_POST['wppcs_action'] ) {
             return;
@@ -111,7 +114,6 @@ class Admin_Menu {
             ],
             [ '%s', '%s', '%s', '%s', '%s', '%s' ]
         );
-
         $redirect_url = add_query_arg( [ 'page' => 'wp-pdpa-cs-cookie-manager', 'message' => '1' ], admin_url( 'admin.php' ) );
         wp_safe_redirect( $redirect_url );
         exit;
@@ -151,6 +153,7 @@ class Admin_Menu {
         add_submenu_page( 'wp-pdpa-cs-dashboard', 'Settings', 'Settings', 'manage_options', 'wp-pdpa-cs-settings', [ $this, 'settings_page_html' ] );
         
         add_action( 'load-' . $requests_page_hook, [ $this, 'handle_request_actions' ] );
+        // NEW: Hook our new action handler to the load action of the Cookie Manager page
         add_action( 'load-' . $cookie_manager_hook, [ $this, 'handle_cookie_manager_actions' ] );
     }
 
@@ -332,7 +335,7 @@ class Admin_Menu {
                     <p>
                         <?php wp_nonce_field( 'wppcs_update_request_status_' . $request->request_id, '_wppcs_request_nonce' ); ?>
                         <input type="hidden" name="wppcs_action" value="update_request_status">
-                        <input type="hidden" name="request_id" value="<?php echo esc_attr( $request->id ); ?>">
+                        <input type="hidden" name="request_id" value="<?php echo esc_attr( $request->request_id ); ?>">
                         <button type="submit" class="button button-primary button-large"><?php esc_html_e( 'Update Status', 'wp-pdpa-cs' ); ?></button>
                     </p>
                 </form>
